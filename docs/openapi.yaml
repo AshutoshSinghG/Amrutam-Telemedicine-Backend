@@ -1,0 +1,394 @@
+openapi: 3.0.3
+info:
+  title: Amrutam Telemedicine API
+  description: Production-grade telemedicine backend API
+  version: 1.0.0
+  contact:
+    email: dev@amrutam.health
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Development server
+  - url: https://api.amrutam.health/api/v1
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User authentication and authorization
+  - name: Users
+    description: User profile management
+  - name: Doctors
+    description: Doctor management and search
+  - name: Availability
+    description: Doctor availability slots
+  - name: Consultations
+    description: Consultation booking and management
+  - name: Prescriptions
+    description: Digital prescriptions
+  - name: Payments
+    description: Payment processing
+  - name: Analytics
+    description: Admin analytics (admin only)
+  - name: Audit
+    description: Audit logs (admin only)
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [PATIENT, DOCTOR, ADMIN, SUPPORT]
+        isEmailVerified:
+          type: boolean
+        mfaEnabled:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    Profile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+        gender:
+          type: string
+          enum: [MALE, FEMALE, OTHER, PREFER_NOT_TO_SAY]
+        dateOfBirth:
+          type: string
+          format: date
+        phone:
+          type: string
+        address:
+          type: string
+        timezone:
+          type: string
+
+    Doctor:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        specialization:
+          type: string
+        yearsOfExperience:
+          type: integer
+        registrationNumber:
+          type: string
+        consultationFee:
+          type: number
+        languagesSpoken:
+          type: array
+          items:
+            type: string
+        bio:
+          type: string
+        isApproved:
+          type: boolean
+        rating:
+          type: number
+
+    Consultation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        patientId:
+          type: string
+        doctorId:
+          type: string
+        slotId:
+          type: string
+        status:
+          type: string
+          enum: [REQUESTED, CONFIRMED, IN_PROGRESS, COMPLETED, CANCELLED, NO_SHOW]
+        reason:
+          type: string
+        paymentStatus:
+          type: string
+          enum: [PENDING, PAID, FAILED]
+        createdAt:
+          type: string
+          format: date-time
+
+paths:
+  /auth/signup:
+    post:
+      tags: [Authentication]
+      summary: Register new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, fullName]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                fullName:
+                  type: string
+                role:
+                  type: string
+                  enum: [PATIENT, DOCTOR]
+      responses:
+        '201':
+          description: User created successfully
+        '409':
+          description: Email already exists
+
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Login user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  accessToken:
+                    type: string
+                  refreshToken:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+
+  /users/me:
+    get:
+      tags: [Users]
+      summary: Get current user profile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User profile retrieved
+    patch:
+      tags: [Users]
+      summary: Update current user profile
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Profile'
+      responses:
+        '200':
+          description: Profile updated
+
+  /doctors:
+    get:
+      tags: [Doctors]
+      summary: Search doctors
+      parameters:
+        - name: specialization
+          in: query
+          schema:
+            type: string
+        - name: language
+          in: query
+          schema:
+            type: string
+        - name: minFee
+          in: query
+          schema:
+            type: number
+        - name: maxFee
+          in: query
+          schema:
+            type: number
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of doctors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Doctor'
+                  pagination:
+                    type: object
+
+  /consultations:
+    post:
+      tags: [Consultations]
+      summary: Book consultation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [doctorId, slotId, reason]
+              properties:
+                doctorId:
+                  type: string
+                slotId:
+                  type: string
+                reason:
+                  type: string
+      responses:
+        '201':
+          description: Consultation booked
+        '409':
+          description: Slot not available
+
+  /consultations/me:
+    get:
+      tags: [Consultations]
+      summary: Get my consultations (patient)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of consultations
+
+  /prescriptions:
+    post:
+      tags: [Prescriptions]
+      summary: Create prescription (doctor only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [consultationId, patientId, medications]
+              properties:
+                consultationId:
+                  type: string
+                patientId:
+                  type: string
+                medications:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      dosage:
+                        type: string
+                      frequency:
+                        type: string
+                advice:
+                  type: string
+      responses:
+        '201':
+          description: Prescription created
+
+  /admin/analytics/summary:
+    get:
+      tags: [Analytics]
+      summary: Get analytics summary (admin only)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalUsers:
+                    type: integer
+                  totalDoctors:
+                    type: integer
+                  totalConsultations:
+                    type: integer
+                  totalRevenue:
+                    type: number
+
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: Service healthy
+
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      responses:
+        '200':
+          description: Metrics in Prometheus format
+          content:
+            text/plain:
+              schema:
+                type: string
