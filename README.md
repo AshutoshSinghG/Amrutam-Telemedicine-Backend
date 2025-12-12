@@ -231,11 +231,3 @@ See [`docs/security_and_threat_model.md`](./docs/security_and_threat_model.md) f
 3. Make your changes
 4. Run tests and linting
 5. Submit a pull request
-
-## License
-
-MIT
-
-## Support
-
-For issues and questions, please open a GitHub issue or contact the development team at dev@amrutam.health.
